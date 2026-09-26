@@ -5,13 +5,19 @@ import { useState } from 'react';
 export default function ActivityCompletionToggle({
     activityId,
     completed,
+    weeksCompleted,
 }: {
     activityId: number;
     completed: boolean;
+    weeksCompleted: boolean;
 }) {
     const [processing, setProcessing] = useState(false);
 
     const toggle = () => {
+        if (!completed && !weeksCompleted) {
+            return;
+        }
+
         setProcessing(true);
         router.post(
             route('activity-progress-reports.store', activityId),
@@ -23,11 +29,18 @@ export default function ActivityCompletionToggle({
         );
     };
 
+    const disabled = processing || (!completed && !weeksCompleted);
+
     return (
         <label
+            title={
+                !completed && !weeksCompleted
+                    ? 'Marca todas las semanas planificadas antes de dar la actividad por cumplida'
+                    : undefined
+            }
             className={
-                'inline-flex cursor-pointer items-center gap-2 text-sm ' +
-                (processing ? 'opacity-60' : '')
+                'inline-flex items-center gap-2 text-sm ' +
+                (disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer')
             }
         >
             <span
@@ -44,7 +57,7 @@ export default function ActivityCompletionToggle({
                 type="checkbox"
                 className="sr-only"
                 checked={completed}
-                disabled={processing}
+                disabled={disabled}
                 onChange={toggle}
             />
             <span className={completed ? 'text-green-700' : 'text-gray-600'}>

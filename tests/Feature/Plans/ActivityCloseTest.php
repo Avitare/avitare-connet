@@ -9,6 +9,7 @@ use App\Models\Company;
 use App\Models\MonthlyPlan;
 use App\Models\Period;
 use App\Models\PlanGroup;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
@@ -56,6 +57,7 @@ class ActivityCloseTest extends TestCase
     public function test_jefe_de_area_can_close_an_activity_without_closing_the_plan(): void
     {
         $jefe = $this->jefe();
+        $this->activity->update(['deliverable' => 'Evidencia', 'deliverable_type' => 'note']);
 
         $this->actingAs($jefe)
             ->post(route('activities.close', $this->activity))
@@ -67,6 +69,29 @@ class ActivityCloseTest extends TestCase
         $this->assertNotNull($this->activity->closed_at);
         $this->assertEquals($jefe->id, $this->activity->closed_by);
         $this->assertEquals('vigente', $this->plan->status->value);
+    }
+
+    public function test_closing_an_activity_without_a_deliverable_is_rejected(): void
+    {
+        $jefe = $this->jefe();
+
+        $this->actingAs($jefe)
+            ->post(route('activities.close', $this->activity))
+            ->assertSessionHasErrors('deliverable');
+
+        $this->assertNull($this->activity->fresh()->closed_at);
+    }
+
+    public function test_closing_an_activity_without_a_deliverable_is_allowed_when_the_rule_is_disabled(): void
+    {
+        SystemSetting::current()->update(['require_deliverable_to_close_activity' => false]);
+        $jefe = $this->jefe();
+
+        $this->actingAs($jefe)
+            ->post(route('activities.close', $this->activity))
+            ->assertSessionHasNoErrors();
+
+        $this->assertNotNull($this->activity->fresh()->closed_at);
     }
 
     public function test_reporting_on_a_closed_activity_is_forbidden(): void
@@ -93,6 +118,48 @@ class ActivityCloseTest extends TestCase
         $this->actingAs($jefe)
             ->post(route('activity-progress-reports.store', $this->activity), ['completed' => true])
             ->assertSessionHasNoErrors();
+    }
+
+    public function test_marking_completed_is_rejected_when_planned_weeks_are_not_done(): void
+    {
+        $jefe = $this->jefe();
+        $this->activity->weeks()->create(['week_number' => 1]);
+        $this->activity->weeks()->create(['week_number' => 2]);
+
+        $this->actingAs($jefe)
+            ->post(route('activity-progress-reports.store', $this->activity), ['completed' => true])
+            ->assertSessionHasErrors('completed');
+
+        $this->assertSame(0, $this->activity->fresh()->progressReports()->count());
+    }
+
+    public function test_marking_completed_succeeds_once_all_planned_weeks_are_done(): void
+    {
+        $jefe = $this->jefe();
+        $week1 = $this->activity->weeks()->create(['week_number' => 1]);
+        $week2 = $this->activity->weeks()->create(['week_number' => 2]);
+        $week1->update(['completed_at' => now()]);
+        $week2->update(['completed_at' => now()]);
+
+        $this->actingAs($jefe)
+            ->post(route('activity-progress-reports.store', $this->activity), ['completed' => true])
+            ->assertSessionHasNoErrors();
+
+        $this->assertEquals(100.0, $this->activity->fresh()->latestProgressReport?->value);
+    }
+
+    public function test_marking_completed_is_allowed_without_all_weeks_when_the_rule_is_disabled(): void
+    {
+        SystemSetting::current()->update(['require_weeks_completed_to_mark_activity_done' => false]);
+        $jefe = $this->jefe();
+        $this->activity->weeks()->create(['week_number' => 1]);
+        $this->activity->weeks()->create(['week_number' => 2]);
+
+        $this->actingAs($jefe)
+            ->post(route('activity-progress-reports.store', $this->activity), ['completed' => true])
+            ->assertSessionHasNoErrors();
+
+        $this->assertEquals(100.0, $this->activity->fresh()->latestProgressReport?->value);
     }
 
     public function test_jefe_de_area_from_another_area_cannot_close(): void

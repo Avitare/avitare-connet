@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Activity;
 use App\Models\ActivityProgressReportAttachment;
+use App\Models\SystemSetting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ActivityProgressReportController extends Controller
@@ -18,6 +20,16 @@ class ActivityProgressReportController extends Controller
         $data = $request->validate([
             'completed' => ['required', 'boolean'],
         ]);
+
+        if (
+            $data['completed']
+            && SystemSetting::current()->require_weeks_completed_to_mark_activity_done
+            && ! $activity->allPlannedWeeksCompleted()
+        ) {
+            throw ValidationException::withMessages([
+                'completed' => 'Marca todas las semanas planificadas antes de dar la actividad por cumplida.',
+            ]);
+        }
 
         $activity->progressReports()->create([
             'value' => $data['completed'] ? $activity->target() : 0,

@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Ticket;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -39,6 +41,28 @@ class HandleInertiaRequests extends Middleware
                     'roles' => $user->getRoleNames(),
                 ] : null,
             ],
+            'ticketAlerts' => $user ? $this->ticketAlerts($user) : 0,
         ];
+    }
+
+    /**
+     * Contador simple para la campanita de tickets en el nav: para TI/admin,
+     * cuántos tickets abiertos necesitan atención (sin asignar o asignados
+     * a ellos mismos); para el resto, cuántos de sus propios tickets están
+     * resueltos y esperando que confirmen el cierre.
+     */
+    private function ticketAlerts(User $user): int
+    {
+        if ($user->hasRole('admin') || $user->hasRole('ti')) {
+            return Ticket::query()
+                ->whereIn('status', Ticket::OPEN_STATUSES)
+                ->where(fn ($q) => $q->whereNull('assigned_to')->orWhere('assigned_to', $user->id))
+                ->count();
+        }
+
+        return Ticket::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'RESUELTO')
+            ->count();
     }
 }

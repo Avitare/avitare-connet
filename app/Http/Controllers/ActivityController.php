@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Activity;
 use App\Models\PlanGroup;
+use App\Models\SystemSetting;
 use App\Support\CalendarWeeks;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -64,6 +65,12 @@ class ActivityController extends Controller
     public function close(Request $request, Activity $activity): RedirectResponse
     {
         $this->authorize('close', $activity);
+
+        if (SystemSetting::current()->require_deliverable_to_close_activity && ! $activity->hasDeliverable()) {
+            throw ValidationException::withMessages([
+                'deliverable' => 'Sube un entregable antes de cerrar la actividad.',
+            ]);
+        }
 
         $activity->update([
             'closed_at' => now(),

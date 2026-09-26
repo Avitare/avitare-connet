@@ -14,6 +14,7 @@ const roleLabels: Record<Role, string> = {
     gerencia: 'Gerencia General',
     jefe_area: 'Jefe de área',
     marketing: 'Marketing',
+    ti: 'Soporte TI',
 };
 
 export default function Create({

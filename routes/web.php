@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\Admin\AreaController;
+use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\SiteController as AdminSiteController;
+use App\Http\Controllers\Admin\SystemSettingController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\ActivityProgressReportController;
@@ -10,9 +13,9 @@ use App\Http\Controllers\PlanController;
 use App\Http\Controllers\PlanGroupController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RequerimientoController;
+use App\Http\Controllers\SiteController;
 use App\Http\Controllers\TicketController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::get('/', function () {
     return redirect()->route(auth()->check() ? 'dashboard' : 'login');
@@ -22,9 +25,9 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
-Route::get('/mis-sitios', function () {
-    return Inertia::render('Sites/Index');
-})->middleware(['auth', 'verified'])->name('sites.index');
+Route::get('/mis-sitios', [SiteController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('sites.index');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -80,11 +83,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/tickets/{ticket}/calificar', [TicketController::class, 'rate'])->name('tickets.rate');
     Route::post('/tickets/{ticket}/estado', [TicketController::class, 'status'])->name('tickets.status');
     Route::post('/tickets/{ticket}/resolver', [TicketController::class, 'resolve'])->name('tickets.resolve');
+    Route::post('/tickets/{ticket}/cancelar', [TicketController::class, 'cancel'])->name('tickets.cancel');
+    Route::post('/tickets/{ticket}/asignar', [TicketController::class, 'assign'])->name('tickets.assign');
+    Route::post('/tickets/{ticket}/prioridad', [TicketController::class, 'reprioritize'])->name('tickets.reprioritize');
 });
 
 Route::middleware(['auth', 'verified'])->prefix('admin')->name('admin.')->group(function () {
     Route::resource('areas', AreaController::class)->except('show');
     Route::resource('users', UserController::class)->except('show');
+    Route::resource('categories', CategoryController::class)->except('show');
+    Route::resource('sites', AdminSiteController::class)->except(['show', 'destroy']);
+    Route::patch('sites/{site}/toggle', [AdminSiteController::class, 'toggle'])->name('sites.toggle');
+    Route::get('settings', [SystemSettingController::class, 'edit'])->name('settings.edit');
+    Route::put('settings', [SystemSettingController::class, 'update'])->name('settings.update');
 });
 
 require __DIR__.'/auth.php';

@@ -14,9 +14,11 @@ import {
     LayoutGrid,
     LogOut,
     Menu,
+    Settings,
     Ticket,
     Users,
     UserCircle,
+    Wrench,
     X,
 } from 'lucide-react';
 import { PropsWithChildren, ReactNode, useState } from 'react';
@@ -26,19 +28,42 @@ const roleLabels: Record<Role, string> = {
     gerencia: 'Gerencia General',
     jefe_area: 'Jefe de área',
     marketing: 'Marketing',
+    ti: 'Soporte TI',
 };
+
+function CountBadge({ count }: { count: number }) {
+    if (count <= 0) {
+        return null;
+    }
+
+    return (
+        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
+            {count > 99 ? '99+' : count}
+        </span>
+    );
+}
 
 export default function Authenticated({
     header,
     children,
 }: PropsWithChildren<{ header?: ReactNode }>) {
-    const user = usePage().props.auth.user;
+    const { auth, ticketAlerts } = usePage().props;
+    const user = auth.user;
     const isAdmin = user.roles.includes('admin');
+    const isTi = user.roles.includes('ti');
+    const canManageTickets = isAdmin || isTi;
     const canRequest = user.area_id !== null;
     const canSeeRequerimientosInbox =
         isAdmin ||
         user.roles.includes('gerencia') ||
         user.roles.includes('marketing');
+    const isAdminSectionActive =
+        route().current('tickets.inbox') ||
+        route().current('admin.categories.*') ||
+        route().current('admin.areas.*') ||
+        route().current('admin.sites.*') ||
+        route().current('admin.users.*') ||
+        route().current('admin.settings.*');
     const roleLabel = roleLabels[user.roles[0]] ?? null;
     const initials = user.name
         .split(' ')
@@ -86,13 +111,18 @@ export default function Authenticated({
                                 >
                                     Mis sitios
                                 </NavLink>
-                                <NavLink
-                                    href={route('tickets.index')}
-                                    active={route().current('tickets.index')}
-                                    icon={Ticket}
-                                >
-                                    Mis tickets
-                                </NavLink>
+                                {!canManageTickets && (
+                                    <NavLink
+                                        href={route('tickets.index')}
+                                        active={route().current(
+                                            'tickets.index',
+                                        )}
+                                        icon={Ticket}
+                                    >
+                                        Mis tickets
+                                        <CountBadge count={ticketAlerts} />
+                                    </NavLink>
+                                )}
                                 {canRequest && (
                                     <NavLink
                                         href={route('requerimientos.index')}
@@ -115,36 +145,112 @@ export default function Authenticated({
                                         Bandeja de requerimientos
                                     </NavLink>
                                 )}
-                                {isAdmin && (
-                                    <>
-                                        <NavLink
-                                            href={route('tickets.inbox')}
-                                            active={route().current(
-                                                'tickets.inbox',
-                                            )}
-                                            icon={Inbox}
+                                {isAdmin ? (
+                                    <Dropdown>
+                                        <Dropdown.Trigger>
+                                            <button
+                                                type="button"
+                                                className={
+                                                    'inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition duration-150 ease-in-out focus:outline-none ' +
+                                                    (isAdminSectionActive
+                                                        ? 'bg-green-50 text-green-800'
+                                                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800')
+                                                }
+                                            >
+                                                <Wrench
+                                                    className={
+                                                        'h-4 w-4 ' +
+                                                        (isAdminSectionActive
+                                                            ? 'text-green-700'
+                                                            : 'text-gray-400')
+                                                    }
+                                                    strokeWidth={2}
+                                                />
+                                                Administración
+                                                <CountBadge
+                                                    count={ticketAlerts}
+                                                />
+                                                <ChevronDown className="h-3.5 w-3.5" />
+                                            </button>
+                                        </Dropdown.Trigger>
+                                        <Dropdown.Content
+                                            align="left"
+                                            width="56"
                                         >
-                                            Bandeja de tickets
-                                        </NavLink>
-                                        <NavLink
-                                            href={route('admin.areas.index')}
-                                            active={route().current(
-                                                'admin.areas.*',
-                                            )}
-                                            icon={Building2}
-                                        >
-                                            Áreas
-                                        </NavLink>
-                                        <NavLink
-                                            href={route('admin.users.index')}
-                                            active={route().current(
-                                                'admin.users.*',
-                                            )}
-                                            icon={Users}
-                                        >
-                                            Usuarios
-                                        </NavLink>
-                                    </>
+                                            <Dropdown.Link
+                                                href={route('tickets.inbox')}
+                                                className="flex items-center justify-between"
+                                            >
+                                                Bandeja de tickets
+                                                <CountBadge
+                                                    count={ticketAlerts}
+                                                />
+                                            </Dropdown.Link>
+                                            <Dropdown.Link
+                                                href={route(
+                                                    'admin.categories.index',
+                                                )}
+                                            >
+                                                Categorías
+                                            </Dropdown.Link>
+                                            <Dropdown.Link
+                                                href={route(
+                                                    'admin.areas.index',
+                                                )}
+                                            >
+                                                Áreas
+                                            </Dropdown.Link>
+                                            <Dropdown.Link
+                                                href={route(
+                                                    'admin.sites.index',
+                                                )}
+                                            >
+                                                Sitios
+                                            </Dropdown.Link>
+                                            <Dropdown.Link
+                                                href={route(
+                                                    'admin.users.index',
+                                                )}
+                                            >
+                                                Usuarios
+                                            </Dropdown.Link>
+                                            <Dropdown.Link
+                                                href={route(
+                                                    'admin.settings.edit',
+                                                )}
+                                            >
+                                                Configuración
+                                            </Dropdown.Link>
+                                        </Dropdown.Content>
+                                    </Dropdown>
+                                ) : (
+                                    isTi && (
+                                        <>
+                                            <NavLink
+                                                href={route('tickets.inbox')}
+                                                active={route().current(
+                                                    'tickets.inbox',
+                                                )}
+                                                icon={Inbox}
+                                            >
+                                                Bandeja de tickets
+                                                <CountBadge
+                                                    count={ticketAlerts}
+                                                />
+                                            </NavLink>
+                                            <NavLink
+                                                href={route(
+                                                    'admin.categories.index',
+                                                )}
+                                                active={route().current(
+                                                    'admin.categories.*',
+                                                )}
+                                                icon={Ticket}
+                                            >
+                                                Categorías
+                                            </NavLink>
+                                        </>
+                                    )
                                 )}
                             </div>
                         </div>
@@ -243,13 +349,16 @@ export default function Authenticated({
                         >
                             Mis sitios
                         </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            href={route('tickets.index')}
-                            active={route().current('tickets.index')}
-                            icon={Ticket}
-                        >
-                            Mis tickets
-                        </ResponsiveNavLink>
+                        {!canManageTickets && (
+                            <ResponsiveNavLink
+                                href={route('tickets.index')}
+                                active={route().current('tickets.index')}
+                                icon={Ticket}
+                            >
+                                Mis tickets
+                                <CountBadge count={ticketAlerts} />
+                            </ResponsiveNavLink>
+                        )}
                         {canRequest && (
                             <ResponsiveNavLink
                                 href={route('requerimientos.index')}
@@ -272,7 +381,7 @@ export default function Authenticated({
                                 Bandeja de requerimientos
                             </ResponsiveNavLink>
                         )}
-                        {isAdmin && (
+                        {canManageTickets && (
                             <>
                                 <ResponsiveNavLink
                                     href={route('tickets.inbox')}
@@ -280,7 +389,21 @@ export default function Authenticated({
                                     icon={Inbox}
                                 >
                                     Bandeja de tickets
+                                    <CountBadge count={ticketAlerts} />
                                 </ResponsiveNavLink>
+                                <ResponsiveNavLink
+                                    href={route('admin.categories.index')}
+                                    active={route().current(
+                                        'admin.categories.*',
+                                    )}
+                                    icon={Ticket}
+                                >
+                                    Categorías
+                                </ResponsiveNavLink>
+                            </>
+                        )}
+                        {isAdmin && (
+                            <>
                                 <ResponsiveNavLink
                                     href={route('admin.areas.index')}
                                     active={route().current('admin.areas.*')}
@@ -294,6 +417,13 @@ export default function Authenticated({
                                     icon={Users}
                                 >
                                     Usuarios
+                                </ResponsiveNavLink>
+                                <ResponsiveNavLink
+                                    href={route('admin.settings.edit')}
+                                    active={route().current('admin.settings.*')}
+                                    icon={Settings}
+                                >
+                                    Configuración
                                 </ResponsiveNavLink>
                             </>
                         )}

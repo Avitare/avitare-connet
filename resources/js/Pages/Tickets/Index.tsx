@@ -1,5 +1,9 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { TicketStatusBadge } from '@/Support/ticketDisplay';
+import {
+    SlaBadge,
+    TicketPriorityBadge,
+    TicketStatusBadge,
+} from '@/Support/ticketDisplay';
 import { TicketCategory, TicketListItem } from '@/types/models';
 import { Head, Link } from '@inertiajs/react';
 
@@ -71,7 +75,7 @@ export default function Index({
                                 <Link
                                     key={ticket.id}
                                     href={route('tickets.show', ticket.id)}
-                                    className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition hover:shadow-md"
+                                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition hover:shadow-md"
                                 >
                                     <div className="flex min-w-0 items-center gap-3">
                                         <span className="text-xl">
@@ -90,7 +94,15 @@ export default function Index({
                                             </div>
                                         </div>
                                     </div>
-                                    <TicketStatusBadge status={ticket.status} />
+                                    <div className="flex items-center gap-2">
+                                        <TicketPriorityBadge
+                                            priority={ticket.priority}
+                                        />
+                                        <SlaBadge ticket={ticket} />
+                                        <TicketStatusBadge
+                                            status={ticket.status}
+                                        />
+                                    </div>
                                 </Link>
                             ))}
                         </div>

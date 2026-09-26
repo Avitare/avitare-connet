@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'gerencia' | 'jefe_area' | 'marketing';
+export type Role = 'admin' | 'gerencia' | 'jefe_area' | 'marketing' | 'ti';
 
 export interface User {
     id: number;
@@ -16,4 +16,5 @@ export type PageProps<
     auth: {
         user: User;
     };
+    ticketAlerts: number;
 };

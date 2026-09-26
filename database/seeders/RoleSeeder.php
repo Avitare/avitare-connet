@@ -12,6 +12,7 @@ class RoleSeeder extends Seeder
         'gerencia',
         'jefe_area',
         'marketing',
+        'ti',
     ];
 
     public function run(): void

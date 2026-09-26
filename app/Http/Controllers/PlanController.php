@@ -6,6 +6,7 @@ use App\Models\Activity;
 use App\Models\MonthlyPlan;
 use App\Models\Period;
 use App\Models\PlanGroup;
+use App\Models\SystemSetting;
 use App\Services\Plans\ActivityMetricsService;
 use App\Services\Plans\ComplianceAggregationService;
 use App\Services\Plans\PlanApprovalService;
@@ -101,8 +102,13 @@ class PlanController extends Controller
         ]);
 
         $previousPlan = $this->previousPlan($plan);
+        $settings = SystemSetting::current();
 
         return Inertia::render('Plans/Show', [
+            'settings' => [
+                'require_deliverable_to_close_activity' => $settings->require_deliverable_to_close_activity,
+                'require_weeks_completed_to_mark_activity_done' => $settings->require_weeks_completed_to_mark_activity_done,
+            ],
             'plan' => [
                 'id' => $plan->id,
                 'status' => $plan->status->value,

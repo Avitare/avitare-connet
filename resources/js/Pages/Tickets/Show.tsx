@@ -1,3 +1,4 @@
+import DangerButton from '@/Components/DangerButton';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
@@ -10,18 +11,21 @@ import {
     formatDateTime,
 } from '@/Support/ticketDisplay';
 import { PageProps } from '@/types';
-import { Ticket } from '@/types/models';
+import { Ticket, TicketPriority } from '@/types/models';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
     AlignLeft,
     CheckCircle2,
+    Gauge,
     Info,
     MessageSquare,
     Paperclip,
     RefreshCw,
     Send,
     Star,
+    UserCheck,
     Wrench,
+    XCircle,
 } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
 
@@ -173,6 +177,155 @@ function RateBox({ ticketId }: { ticketId: number }) {
     );
 }
 
+function CancelBox({ ticketId }: { ticketId: number }) {
+    const [open, setOpen] = useState(false);
+    const { data, setData, post, processing, errors, reset } = useForm({
+        reason: '',
+    });
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('tickets.cancel', ticketId), {
+            preserveScroll: true,
+            onSuccess: () => {
+                reset();
+                setOpen(false);
+            },
+        });
+    };
+
+    if (!open) {
+        return (
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-red-600"
+            >
+                <XCircle className="h-3.5 w-3.5" />
+                Cancelar ticket
+            </button>
+        );
+    }
+
+    return (
+        <form
+            onSubmit={submit}
+            className="space-y-2 rounded-xl border border-red-100 bg-red-50/50 p-4"
+        >
+            <p className="text-sm font-medium text-gray-900">
+                ¿Cancelar este ticket?
+            </p>
+            <textarea
+                className="w-full rounded-md border-gray-300 text-sm focus:border-green-600 focus:ring-green-600"
+                rows={2}
+                placeholder="Motivo (opcional)"
+                value={data.reason}
+                onChange={(e) => setData('reason', e.target.value)}
+            />
+            <InputError message={errors.reason} />
+            <InputError message={(errors as Record<string, string>).ticket} />
+            <div className="flex gap-2">
+                <DangerButton disabled={processing} className="gap-1.5">
+                    <XCircle className="h-3.5 w-3.5" />
+                    Confirmar cancelación
+                </DangerButton>
+                <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                >
+                    Volver
+                </button>
+            </div>
+        </form>
+    );
+}
+
+function AssignBox({ ticket }: { ticket: Ticket }) {
+    const { auth } = usePage<PageProps>().props;
+    const isMine = ticket.assigned_to?.id === auth.user.id;
+
+    const assignToMe = () => {
+        router.post(
+            route('tickets.assign', ticket.id),
+            {},
+            { preserveScroll: true },
+        );
+    };
+
+    return (
+        <div className="space-y-2 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+            <p className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
+                <UserCheck className="h-4 w-4" />
+                Asignación
+            </p>
+            <p className="text-sm text-gray-600">
+                {ticket.assigned_to
+                    ? `Asignado a ${ticket.assigned_to.name}`
+                    : 'Sin asignar todavía.'}
+            </p>
+            {!isMine && (
+                <SecondaryButton onClick={assignToMe} className="gap-1.5">
+                    <UserCheck className="h-3.5 w-3.5" />
+                    {ticket.assigned_to ? 'Asignarme a mí' : 'Asignarme'}
+                </SecondaryButton>
+            )}
+        </div>
+    );
+}
+
+function PriorityBox({
+    ticket,
+    priorities,
+}: {
+    ticket: Ticket;
+    priorities: TicketPriority[];
+}) {
+    const { data, setData, post, processing } = useForm({
+        priority_id: String(ticket.priority.id),
+    });
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('tickets.reprioritize', ticket.id), {
+            preserveScroll: true,
+        });
+    };
+
+    return (
+        <form
+            onSubmit={submit}
+            className="space-y-2 rounded-xl border border-gray-100 bg-white p-4 shadow-sm"
+        >
+            <p className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
+                <Gauge className="h-4 w-4" />
+                Prioridad
+            </p>
+            <select
+                className="w-full rounded-md border-gray-300 text-sm focus:border-green-600 focus:ring-green-600"
+                value={data.priority_id}
+                onChange={(e) => setData('priority_id', e.target.value)}
+            >
+                {priorities.map((priority) => (
+                    <option key={priority.id} value={priority.id}>
+                        {priority.name}
+                    </option>
+                ))}
+            </select>
+            <SecondaryButton
+                disabled={
+                    processing ||
+                    Number(data.priority_id) === ticket.priority.id
+                }
+                className="gap-1.5"
+            >
+                <Gauge className="h-3.5 w-3.5" />
+                Actualizar prioridad
+            </SecondaryButton>
+        </form>
+    );
+}
+
 function StatusActions({ ticket }: { ticket: Ticket }) {
     const { data, setData, post, processing, errors } = useForm({
         status: '',
@@ -274,9 +427,16 @@ function ResolveBox({ ticket }: { ticket: Ticket }) {
 export default function Show({
     ticket,
     can,
+    priorities,
 }: {
     ticket: Ticket;
-    can: { manage: boolean; confirm: boolean };
+    can: {
+        manage: boolean;
+        confirm: boolean;
+        cancel: boolean;
+        assign: boolean;
+    };
+    priorities: TicketPriority[];
 }) {
     const { auth } = usePage<PageProps>().props;
     const isOwner = auth.user.id === ticket.user.id;
@@ -327,10 +487,21 @@ export default function Show({
                                 <RateBox ticketId={ticket.id} />
                             )}
 
+                        {can.cancel && (
+                            <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                                <CancelBox ticketId={ticket.id} />
+                            </div>
+                        )}
+
                         {can.manage && (
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <StatusActions ticket={ticket} />
                                 <ResolveBox ticket={ticket} />
+                                <AssignBox ticket={ticket} />
+                                <PriorityBox
+                                    ticket={ticket}
+                                    priorities={priorities}
+                                />
                             </div>
                         )}
 
@@ -389,6 +560,16 @@ export default function Show({
                                         {ticket.type.name}
                                     </dd>
                                 </div>
+                                {ticket.assigned_to && (
+                                    <div className="flex justify-between gap-2">
+                                        <dt className="text-gray-500">
+                                            Atendido por
+                                        </dt>
+                                        <dd className="text-right text-gray-900">
+                                            {ticket.assigned_to.name}
+                                        </dd>
+                                    </div>
+                                )}
                                 <div className="flex justify-between gap-2">
                                     <dt className="text-gray-500">Creado</dt>
                                     <dd className="text-right text-gray-900">

@@ -13,6 +13,7 @@ import {
     formatNumber,
 } from '@/Support/planDisplay';
 import { PageProps, Role } from '@/types';
+import { ActivityDeliverable } from '@/types/models';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 
 const roleLabels: Record<Role, string> = {
@@ -20,6 +21,7 @@ const roleLabels: Record<Role, string> = {
     gerencia: 'Gerencia General',
     jefe_area: 'Jefe de área',
     marketing: 'Marketing',
+    ti: 'Soporte TI',
 };
 
 interface AreaOverviewRow {
@@ -90,6 +92,7 @@ interface MyPlanGroupActivity {
     status: string;
     closed: boolean;
     can_close: boolean;
+    deliverable: ActivityDeliverable | null;
 }
 
 interface MyPlanGroup {
@@ -122,6 +125,7 @@ interface MyPlan {
 
 interface DashboardProps {
     period: { id: number; year: number; month: number } | null;
+    settings: { require_deliverable_to_close_activity: boolean };
     areasOverview?: AreaOverviewRow[];
     periods?: PeriodOption[];
     myPlan?: MyPlan | null;
@@ -230,6 +234,7 @@ function AreasOverview({ areasOverview }: { areasOverview: AreaOverviewRow[] }) 
 
 export default function Dashboard({
     period,
+    settings,
     areasOverview,
     periods,
     myPlan,
@@ -438,6 +443,9 @@ export default function Dashboard({
                                                         }
                                                         currentWeek={
                                                             myPlan.current_week
+                                                        }
+                                                        requireDeliverableToClose={
+                                                            settings.require_deliverable_to_close_activity
                                                         }
                                                     />
                                                 </div>

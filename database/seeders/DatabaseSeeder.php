@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             AreaSeeder::class,
             DemoUserSeeder::class,
             TicketCatalogSeeder::class,
+            SiteSeeder::class,
         ]);
 
         // En producción esto lo dispara el cron de fin de mes; en dev/demo

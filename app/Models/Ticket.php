@@ -29,6 +29,8 @@ class Ticket extends Model
         'category_id',
         'type_id',
         'priority_id',
+        'assigned_to',
+        'assigned_at',
         'status',
         'subject',
         'description',
@@ -49,6 +51,7 @@ class Ticket extends Model
             'first_response_at' => 'datetime',
             'resolved_at' => 'datetime',
             'closed_at' => 'datetime',
+            'assigned_at' => 'datetime',
         ];
     }
 
@@ -77,6 +80,11 @@ class Ticket extends Model
         return $this->belongsTo(Priority::class);
     }
 
+    public function assignedTo(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_to');
+    }
+
     public function events(): HasMany
     {
         return $this->hasMany(TicketEvent::class)->latest();
@@ -94,9 +102,9 @@ class Ticket extends Model
                 return false;
             }
 
-            $reference = $this->first_response_at ?? Carbon::now();
+            $reference = $this->first_response_at ?? $this->openReferenceMoment();
 
-            return $reference->greaterThan($this->sla_response_due_at);
+            return $reference !== null && $reference->greaterThan($this->sla_response_due_at);
         });
     }
 
@@ -107,9 +115,9 @@ class Ticket extends Model
                 return false;
             }
 
-            $reference = $this->resolved_at ?? Carbon::now();
+            $reference = $this->resolved_at ?? $this->openReferenceMoment();
 
-            return $reference->greaterThan($this->sla_resolution_due_at);
+            return $reference !== null && $reference->greaterThan($this->sla_resolution_due_at);
         });
     }
 
@@ -120,9 +128,24 @@ class Ticket extends Model
                 return null;
             }
 
-            $reference = $this->resolved_at ?? Carbon::now();
+            $reference = $this->resolved_at ?? $this->openReferenceMoment();
+
+            if ($reference === null) {
+                return null;
+            }
 
             return (int) $reference->diffInMinutes($this->sla_resolution_due_at, false);
         });
+    }
+
+    /**
+     * "Ahora" como referencia solo tiene sentido mientras el ticket sigue
+     * abierto: uno cancelado (sin resolved_at) no debería seguir mostrando
+     * un SLA corriendo en vivo — quedaría marcado como incumplido para
+     * siempre a medida que pasa el tiempo, lo cual no aporta nada.
+     */
+    private function openReferenceMoment(): ?Carbon
+    {
+        return $this->status === 'CANCELADO' ? null : Carbon::now();
     }
 }

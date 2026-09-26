@@ -19,13 +19,17 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TicketController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
 
+        if ($user->hasRole('admin') || $user->hasRole('ti')) {
+            return redirect()->route('tickets.inbox');
+        }
+
         $tickets = Ticket::query()
             ->where('user_id', $user->id)
-            ->with('category:id,name,icon')
+            ->with(['category:id,name,icon', 'priority:id,name,color,sla_response_minutes,sla_resolution_minutes,rank'])
             ->orderByDesc('id')
             ->get()
             ->map(fn (Ticket $ticket) => [
@@ -34,6 +38,10 @@ class TicketController extends Controller
                 'status' => $ticket->status,
                 'subject' => $ticket->subject,
                 'category' => $ticket->category->only(['id', 'name', 'icon']),
+                'priority' => $ticket->priority->only(['id', 'name', 'color', 'sla_response_minutes', 'sla_resolution_minutes', 'rank']),
+                'resolved_at' => $ticket->resolved_at,
+                'resolution_breached' => $ticket->resolution_breached,
+                'resolution_minutes_remaining' => $ticket->resolution_minutes_remaining,
                 'created_at' => $ticket->created_at,
             ]);
 
@@ -74,14 +82,22 @@ class TicketController extends Controller
     {
         $this->authorize('view', $ticket);
 
-        $ticket->load(['user', 'area', 'category', 'type', 'priority', 'attachments.uploader', 'events.user']);
+        $ticket->load(['user', 'area', 'category', 'type', 'priority', 'assignedTo', 'attachments.uploader', 'events.user']);
+
+        $user = $request->user();
+        $canManage = $user->can('manage', $ticket);
 
         return Inertia::render('Tickets/Show', [
             'ticket' => $this->present($ticket),
             'can' => [
-                'manage' => $request->user()->can('manage', $ticket),
-                'confirm' => $request->user()->can('confirm', $ticket),
+                'manage' => $canManage,
+                'confirm' => $user->can('confirm', $ticket),
+                'cancel' => $user->can('cancel', $ticket),
+                'assign' => $user->can('assign', $ticket),
             ],
+            'priorities' => $canManage
+                ? Priority::orderBy('rank')->get(['id', 'name', 'color', 'sla_response_minutes', 'sla_resolution_minutes', 'rank'])
+                : [],
         ]);
     }
 
@@ -123,6 +139,10 @@ class TicketController extends Controller
     public function rate(Request $request, Ticket $ticket, TicketService $service): RedirectResponse
     {
         $this->authorize('confirm', $ticket);
+
+        if ($ticket->status !== 'CERRADO' || $ticket->satisfaction_rating !== null) {
+            return back()->withErrors(['ticket' => 'Este ticket no se puede calificar.']);
+        }
 
         $data = $request->validate([
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
@@ -167,15 +187,55 @@ class TicketController extends Controller
         return back();
     }
 
+    public function cancel(Request $request, Ticket $ticket, TicketService $service): RedirectResponse
+    {
+        $this->authorize('cancel', $ticket);
+
+        $data = $request->validate(['reason' => ['nullable', 'string']]);
+
+        try {
+            $service->cancel($ticket, $request->user(), $data['reason'] ?? null);
+        } catch (DomainException $e) {
+            return back()->withErrors(['ticket' => $e->getMessage()]);
+        }
+
+        return back();
+    }
+
+    public function assign(Request $request, Ticket $ticket, TicketService $service): RedirectResponse
+    {
+        $this->authorize('assign', $ticket);
+
+        $service->assign($ticket, $request->user());
+
+        return back();
+    }
+
+    public function reprioritize(Request $request, Ticket $ticket, TicketService $service): RedirectResponse
+    {
+        $this->authorize('reprioritize', $ticket);
+
+        $data = $request->validate([
+            'priority_id' => ['required', 'integer', Rule::exists('priorities', 'id')],
+        ]);
+
+        $service->reprioritize($ticket, Priority::findOrFail($data['priority_id']), $request->user());
+
+        return back();
+    }
+
     public function inbox(Request $request): Response
     {
         $user = $request->user();
 
-        abort_unless($user->hasRole('admin'), 403);
+        abort_unless($user->hasRole('admin') || $user->hasRole('ti'), 403);
 
         $status = $request->query('status', 'abiertos');
+        $categoryId = $request->integer('category') ?: null;
+        $search = trim((string) $request->query('search', ''));
+        $assignedFilter = $request->query('assigned', 'todos');
 
-        $query = Ticket::query()->with(['user', 'area', 'category', 'type', 'priority', 'attachments.uploader', 'events.user']);
+        $query = Ticket::query()->with(['user', 'area', 'category', 'type', 'priority', 'assignedTo', 'attachments.uploader', 'events.user']);
 
         $query = match ($status) {
             'resueltos' => $query->where('status', 'RESUELTO'),
@@ -184,9 +244,30 @@ class TicketController extends Controller
             default => $query->whereIn('status', Ticket::OPEN_STATUSES),
         };
 
+        if ($categoryId) {
+            $query->where('category_id', $categoryId);
+        }
+
+        if ($search !== '') {
+            $query->where(
+                fn ($q) => $q->where('code', 'like', "%{$search}%")
+                    ->orWhere('subject', 'like', "%{$search}%"),
+            );
+        }
+
+        match ($assignedFilter) {
+            'sin_asignar' => $query->whereNull('assigned_to'),
+            'mios' => $query->where('assigned_to', $user->id),
+            default => null,
+        };
+
         return Inertia::render('Tickets/Inbox', [
             'tickets' => $query->orderByDesc('id')->get()->map($this->present(...)),
             'statusFilter' => $status,
+            'categoryFilter' => $categoryId,
+            'search' => $search,
+            'assignedFilter' => $assignedFilter,
+            'categories' => Category::orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -210,8 +291,12 @@ class TicketController extends Controller
             'category' => $ticket->category->only(['id', 'name', 'icon']),
             'type' => $ticket->type->only(['id', 'name']),
             'priority' => $ticket->priority->only(['id', 'name', 'color', 'sla_response_minutes', 'sla_resolution_minutes', 'rank']),
+            'assigned_to' => $ticket->assignedTo?->only(['id', 'name']),
             'sla_response_due_at' => $ticket->sla_response_due_at,
             'sla_resolution_due_at' => $ticket->sla_resolution_due_at,
+            'response_breached' => $ticket->response_breached,
+            'resolution_breached' => $ticket->resolution_breached,
+            'resolution_minutes_remaining' => $ticket->resolution_minutes_remaining,
             'first_response_at' => $ticket->first_response_at,
             'resolved_at' => $ticket->resolved_at,
             'closed_at' => $ticket->closed_at,

@@ -93,6 +93,11 @@ class Activity extends Model
         return $this->weeks->max('week_number');
     }
 
+    public function allPlannedWeeksCompleted(): bool
+    {
+        return $this->weeks->every(fn (ActivityWeek $week) => $week->completed_at !== null);
+    }
+
     public function carriedOverFrom(): BelongsTo
     {
         return $this->belongsTo(Activity::class, 'carried_over_from_id');
@@ -106,6 +111,11 @@ class Activity extends Model
     public function isClosed(): bool
     {
         return $this->closed_at !== null;
+    }
+
+    public function hasDeliverable(): bool
+    {
+        return $this->deliverable_type !== null;
     }
 
     public function progressReports(): HasMany

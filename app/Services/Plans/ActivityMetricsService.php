@@ -5,18 +5,12 @@ namespace App\Services\Plans;
 use App\Enums\ActivityStatus;
 use App\Models\Activity;
 use App\Models\Period;
+use App\Models\SystemSetting;
 use App\Support\CalendarWeeks;
 use Carbon\Carbon;
 
 class ActivityMetricsService
 {
-    /**
-     * Umbral de cumplimiento bajo el cual una actividad en curso se considera
-     * "en riesgo" en vez de "al día". No viene definido en el spec de negocio;
-     * es un valor por defecto ajustable.
-     */
-    private const RISK_THRESHOLD = 80.0;
-
     public function currentWeek(Period $period, ?Carbon $reference = null): int
     {
         $reference ??= Carbon::now();
@@ -125,7 +119,7 @@ class ActivityMetricsService
             return ActivityStatus::Atrasada;
         }
 
-        return $this->compliance($activity, $reference) >= self::RISK_THRESHOLD
+        return $this->compliance($activity, $reference) >= SystemSetting::current()->activity_risk_threshold
             ? ActivityStatus::AlDia
             : ActivityStatus::EnRiesgo;
     }

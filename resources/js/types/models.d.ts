@@ -10,6 +10,14 @@ export interface Area {
     active: boolean;
 }
 
+export interface Site {
+    id: number;
+    name: string;
+    description: string | null;
+    url: string;
+    active?: boolean;
+}
+
 export interface AdminUser {
     id: number;
     name: string;
@@ -94,6 +102,11 @@ export interface PlanGroupData {
     name: string;
     compliance: number | null;
     activities: PlanActivity[];
+}
+
+export interface PlanSystemSettings {
+    require_deliverable_to_close_activity: boolean;
+    require_weeks_completed_to_mark_activity_done: boolean;
 }
 
 export interface PlanDetail {
@@ -232,6 +245,10 @@ export interface TicketListItem {
     status: TicketStatus;
     subject: string;
     category: TicketCategory;
+    priority: TicketPriority;
+    resolved_at: string | null;
+    resolution_breached: boolean;
+    resolution_minutes_remaining: number | null;
     created_at: string;
 }
 
@@ -246,8 +263,12 @@ export interface Ticket {
     category: TicketCategory;
     type: TicketTypeOption;
     priority: TicketPriority;
+    assigned_to: TicketRef | null;
     sla_response_due_at: string | null;
     sla_resolution_due_at: string | null;
+    response_breached: boolean;
+    resolution_breached: boolean;
+    resolution_minutes_remaining: number | null;
     first_response_at: string | null;
     resolved_at: string | null;
     closed_at: string | null;

@@ -16,7 +16,7 @@ import {
     STATUS_LABEL,
     formatNumber,
 } from '@/Support/planDisplay';
-import { PlanDetail, PlanGroupData } from '@/types/models';
+import { PlanDetail, PlanGroupData, PlanSystemSettings } from '@/types/models';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Lock } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
@@ -198,12 +198,14 @@ export default function Show({
     groups,
     canManage,
     canClone,
+    settings,
 }: {
     plan: PlanDetail;
     compliance: number | null;
     groups: PlanGroupData[];
     canManage: boolean;
     canClone: boolean;
+    settings: PlanSystemSettings;
 }) {
     const { errors } = usePage().props as {
         errors?: Record<string, string>;
@@ -377,6 +379,9 @@ export default function Show({
                                         activities={group.activities}
                                         totalWeeks={plan.total_weeks}
                                         currentWeek={plan.current_week}
+                                        requireDeliverableToClose={
+                                            settings.require_deliverable_to_close_activity
+                                        }
                                     />
                                 </div>
                             )}
@@ -480,6 +485,14 @@ export default function Show({
                                                             completed={
                                                                 activity.completed
                                                             }
+                                                            weeksCompleted={
+                                                                !settings.require_weeks_completed_to_mark_activity_done ||
+                                                                activity.weeks.every(
+                                                                    (w) =>
+                                                                        w.completed_at !==
+                                                                        null,
+                                                                )
+                                                            }
                                                         />
                                                     ) : (
                                                         <span
@@ -516,6 +529,11 @@ export default function Show({
                                                             }
                                                             closed={
                                                                 activity.closed
+                                                            }
+                                                            hasDeliverable={
+                                                                !settings.require_deliverable_to_close_activity ||
+                                                                activity.deliverable !==
+                                                                    null
                                                             }
                                                         />
                                                     )}

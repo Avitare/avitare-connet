@@ -8,6 +8,7 @@ use App\Models\Area;
 use App\Models\MonthlyPlan;
 use App\Models\PlanGroup;
 use App\Models\Period;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\Plans\ActivityMetricsService;
 use App\Services\Plans\ComplianceAggregationService;
@@ -30,6 +31,9 @@ class DashboardController extends Controller
 
         $data = [
             'period' => $period?->only(['id', 'year', 'month']),
+            'settings' => [
+                'require_deliverable_to_close_activity' => SystemSetting::current()->require_deliverable_to_close_activity,
+            ],
         ];
 
         if ($user->hasRole('gerencia') || $user->hasRole('admin')) {
@@ -143,6 +147,17 @@ class DashboardController extends Controller
                     'status' => $metrics->status($activity, $reference)->value,
                     'closed' => $activity->isClosed(),
                     'can_close' => $user->can('close', $activity),
+                    'deliverable' => $activity->deliverable_type ? [
+                        'type' => $activity->deliverable_type,
+                        'caption' => $activity->deliverable,
+                        'url' => match ($activity->deliverable_type) {
+                            'link' => $activity->deliverable_url,
+                            'file' => route('activities.deliverable.download', $activity->id),
+                            default => null,
+                        },
+                        'file_name' => $activity->deliverable_original_name,
+                        'mime_type' => $activity->deliverable_mime_type,
+                    ] : null,
                 ]),
             ])
             ->values();

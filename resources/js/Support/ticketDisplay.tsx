@@ -1,9 +1,20 @@
+import { TicketEventEntry, TicketPriority, TicketStatus } from '@/types/models';
 import {
-    Ticket,
-    TicketEventEntry,
-    TicketPriority,
-    TicketStatus,
-} from '@/types/models';
+    AlertTriangle,
+    CheckCircle2,
+    Circle,
+    Clock,
+    Gauge,
+    Lock,
+    MessageSquare,
+    Paperclip,
+    RefreshCw,
+    Sparkles,
+    ThumbsUp,
+    UserCheck,
+    XCircle,
+    type LucideIcon,
+} from 'lucide-react';
 
 export const TICKET_STATUS_LABEL: Record<TicketStatus, string> = {
     NUEVO: 'Nuevo',
@@ -35,7 +46,11 @@ export function TicketStatusBadge({ status }: { status: TicketStatus }) {
     );
 }
 
-export function TicketPriorityBadge({ priority }: { priority: TicketPriority }) {
+export function TicketPriorityBadge({
+    priority,
+}: {
+    priority: TicketPriority;
+}) {
     return (
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-500/20">
             <span
@@ -55,55 +70,60 @@ function formatMinutes(totalMinutes: number): string {
     return hours === 0 ? `${minutes}m` : `${hours}h ${minutes}m`;
 }
 
-export function SlaBadge({ ticket }: { ticket: Ticket }) {
-    if (!ticket.sla_resolution_due_at) {
+/**
+ * El backend ya calcula si el SLA de resolución está incumplido y cuántos
+ * minutos quedan (o pasaron), tomando en cuenta si el ticket ya se resolvió
+ * o sigue corriendo — acá solo se traduce ese número a una insignia.
+ */
+export function SlaBadge({
+    ticket,
+}: {
+    ticket: {
+        resolution_breached: boolean;
+        resolution_minutes_remaining: number | null;
+    };
+}) {
+    if (ticket.resolution_minutes_remaining === null) {
         return null;
     }
 
-    const isTerminal = ticket.status === 'CERRADO' || ticket.status === 'CANCELADO';
-    const reference = ticket.resolved_at ?? (isTerminal ? null : new Date().toISOString());
-
-    if (!reference) {
-        return null;
-    }
-
-    const dueAt = new Date(ticket.sla_resolution_due_at).getTime();
-    const now = new Date(reference).getTime();
-    const diffMinutes = Math.round((dueAt - now) / 60000);
-    const breached = diffMinutes < 0;
-
-    if (breached) {
+    if (ticket.resolution_breached) {
         return (
             <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
-                🔴 SLA incumplido ({formatMinutes(diffMinutes)})
+                <AlertTriangle className="h-3 w-3" />
+                SLA incumplido (
+                {formatMinutes(ticket.resolution_minutes_remaining)})
             </span>
         );
     }
 
-    const soon = diffMinutes <= 60;
+    const soon = ticket.resolution_minutes_remaining <= 60;
 
     return (
         <span
             className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${
-                soon ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+                soon
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'bg-emerald-50 text-emerald-700'
             }`}
         >
-            {soon ? '🟡' : '🟢'} {formatMinutes(diffMinutes)} restantes
+            <Clock className="h-3 w-3" />
+            {formatMinutes(ticket.resolution_minutes_remaining)} restantes
         </span>
     );
 }
 
-const TICKET_EVENT_ICON: Record<string, string> = {
-    created: '🆕',
-    assigned: '👤',
-    status_changed: '🔄',
-    comment: '💬',
-    attachment_added: '📎',
-    escalated: '⬆️',
-    resolved: '✅',
-    confirmed: '👍',
-    closed: '🔒',
-    cancelled: '✖️',
+const TICKET_EVENT_ICON: Record<string, LucideIcon> = {
+    created: Sparkles,
+    assigned: UserCheck,
+    status_changed: RefreshCw,
+    comment: MessageSquare,
+    attachment_added: Paperclip,
+    reprioritized: Gauge,
+    resolved: CheckCircle2,
+    confirmed: ThumbsUp,
+    closed: Lock,
+    cancelled: XCircle,
 };
 
 export function formatDateTime(value: string): string {
@@ -117,33 +137,41 @@ export function formatDateTime(value: string): string {
 
 export function Timeline({ events }: { events: TicketEventEntry[] }) {
     if (events.length === 0) {
-        return <p className="text-sm text-gray-500">Aún no hay actividad en este ticket.</p>;
+        return (
+            <p className="text-sm text-gray-500">
+                Aún no hay actividad en este ticket.
+            </p>
+        );
     }
 
     return (
         <ol className="space-y-4">
-            {events.map((event) => (
-                <li key={event.id} className="flex gap-3">
-                    <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-100 text-sm">
-                        {TICKET_EVENT_ICON[event.type] ?? '•'}
-                    </span>
-                    <div className="min-w-0 flex-1 pb-1">
-                        <div className="flex flex-wrap items-baseline gap-x-2">
-                            <span className="text-sm font-medium text-gray-900">
-                                {event.user?.name ?? 'Sistema'}
-                            </span>
-                            <span className="text-xs text-gray-400">
-                                {formatDateTime(event.created_at)}
-                            </span>
+            {events.map((event) => {
+                const Icon = TICKET_EVENT_ICON[event.type] ?? Circle;
+
+                return (
+                    <li key={event.id} className="flex gap-3">
+                        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-100 text-gray-500">
+                            <Icon className="h-4 w-4" strokeWidth={2} />
+                        </span>
+                        <div className="min-w-0 flex-1 pb-1">
+                            <div className="flex flex-wrap items-baseline gap-x-2">
+                                <span className="text-sm font-medium text-gray-900">
+                                    {event.user?.name ?? 'Sistema'}
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                    {formatDateTime(event.created_at)}
+                                </span>
+                            </div>
+                            {event.body && (
+                                <p className="mt-0.5 whitespace-pre-line text-sm text-gray-700">
+                                    {event.body}
+                                </p>
+                            )}
                         </div>
-                        {event.body && (
-                            <p className="mt-0.5 whitespace-pre-line text-sm text-gray-700">
-                                {event.body}
-                            </p>
-                        )}
-                    </div>
-                </li>
-            ))}
+                    </li>
+                );
+            })}
         </ol>
     );
 }

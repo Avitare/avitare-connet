@@ -28,6 +28,18 @@ class TicketService
         'CANCELADO' => [],
     ];
 
+    /**
+     * Tipo de evento a registrar según el estado destino, para que la
+     * línea de tiempo muestre un icono acorde (ver TICKET_EVENT_ICON en
+     * ticketDisplay.tsx) sin tener que loguear un evento duplicado desde
+     * cada método que llama a changeStatus().
+     */
+    private const STATUS_EVENT_TYPES = [
+        'RESUELTO' => 'resolved',
+        'CERRADO' => 'confirmed',
+        'CANCELADO' => 'cancelled',
+    ];
+
     public function create(array $data, User $creator): Ticket
     {
         return DB::transaction(function () use ($data, $creator) {
@@ -79,7 +91,9 @@ class TicketService
 
         $ticket->update($attributes);
 
-        $this->logEvent($ticket, $actor, 'status_changed', $note ?? "Estado cambiado de {$current} a {$newStatus}", [
+        $eventType = self::STATUS_EVENT_TYPES[$newStatus] ?? 'status_changed';
+
+        $this->logEvent($ticket, $actor, $eventType, $note ?? "Estado cambiado de {$current} a {$newStatus}", [
             'from' => $current,
             'to' => $newStatus,
         ]);
@@ -107,22 +121,61 @@ class TicketService
         return $this->logEvent($ticket, $actor, 'attachment_added', $file->getClientOriginalName());
     }
 
+    /**
+     * Un ticket recién creado (o ya asignado pero sin arrancar) puede
+     * resolverse en un solo paso: se pasa primero por "en proceso" para que
+     * quede registrado el primer contacto (first_response_at) antes de
+     * marcarlo resuelto, en vez de exigirle al agente dos clics separados.
+     */
     public function resolve(Ticket $ticket, User $actor, string $solution): Ticket
     {
-        $ticket = $this->changeStatus($ticket, 'RESUELTO', $actor, $solution);
+        if (in_array($ticket->status, ['NUEVO', 'ASIGNADO'], true)) {
+            $ticket = $this->changeStatus($ticket, 'EN_PROCESO', $actor);
+        }
 
-        $this->logEvent($ticket, $actor, 'resolved', $solution);
-
-        return $ticket;
+        return $this->changeStatus($ticket, 'RESUELTO', $actor, $solution);
     }
 
     public function confirm(Ticket $ticket, User $actor): Ticket
     {
-        $ticket = $this->changeStatus($ticket, 'CERRADO', $actor, 'Usuario confirmó la solución');
+        return $this->changeStatus($ticket, 'CERRADO', $actor, 'Usuario confirmó la solución');
+    }
 
-        $this->logEvent($ticket, $actor, 'confirmed', 'Usuario confirmó la solución');
+    public function cancel(Ticket $ticket, User $actor, ?string $reason = null): Ticket
+    {
+        return $this->changeStatus($ticket, 'CANCELADO', $actor, $reason);
+    }
 
-        return $ticket;
+    public function assign(Ticket $ticket, User $agent): Ticket
+    {
+        $ticket->update([
+            'assigned_to' => $agent->id,
+            'assigned_at' => Carbon::now(),
+        ]);
+
+        $this->logEvent($ticket, $agent, 'assigned', "{$agent->name} se asignó el ticket.");
+
+        return $ticket->fresh();
+    }
+
+    public function reprioritize(Ticket $ticket, Priority $priority, User $actor): Ticket
+    {
+        $previous = $ticket->priority;
+
+        $ticket->update([
+            'priority_id' => $priority->id,
+            'sla_response_due_at' => $ticket->created_at->clone()->addMinutes($priority->sla_response_minutes),
+            'sla_resolution_due_at' => $ticket->created_at->clone()->addMinutes($priority->sla_resolution_minutes),
+        ]);
+
+        $this->logEvent(
+            $ticket,
+            $actor,
+            'reprioritized',
+            "Prioridad cambiada de {$previous->name} a {$priority->name}.",
+        );
+
+        return $ticket->fresh();
     }
 
     public function rate(Ticket $ticket, int $rating, ?string $comment): Ticket

@@ -1,5 +1,6 @@
 import ActivityCloseToggle from '@/Components/ActivityCloseToggle';
 import { ActivityStatusBadge, STATUS_HEX, complianceSeverity } from '@/Support/planDisplay';
+import { ActivityDeliverable } from '@/types/models';
 import { Lock } from 'lucide-react';
 
 interface GanttActivity {
@@ -10,16 +11,19 @@ interface GanttActivity {
     status: string;
     closed?: boolean;
     can_close?: boolean;
+    deliverable?: ActivityDeliverable | null;
 }
 
 export default function GanttChart({
     activities,
     totalWeeks,
     currentWeek,
+    requireDeliverableToClose,
 }: {
     activities: GanttActivity[];
     totalWeeks: number;
     currentWeek: number | null;
+    requireDeliverableToClose: boolean;
 }) {
     const weekLabels = Array.from({ length: totalWeeks }, (_, i) => `S${i + 1}`);
 
@@ -106,6 +110,11 @@ export default function GanttChart({
                                     <ActivityCloseToggle
                                         activityId={activity.id}
                                         closed={closed}
+                                        hasDeliverable={
+                                            !requireDeliverableToClose ||
+                                            (activity.deliverable ?? null) !==
+                                                null
+                                        }
                                     />
                                 )}
                             </div>
